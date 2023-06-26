@@ -57,7 +57,7 @@ VerGraphToMMAGraph::usage="VerGraphToMMAGraph[VerGraph] converts a VerGraph to M
 
 MultigraphDisambiguate::usage="MultigraphDisambiguate[MMAGraph] takes a MMA Graph and adds dots to edges (spurious vertices to propagators) to turn a Mulitgraph into a normal graph.";
 
-VerGraphHashCode::usage="VerGraphHashCode[VerGraph] returns a canonicalized MMA graph.  This may involved dotting edges.  This function is memoized.";
+VerGraphHashCode::usage="VerGraphHashCode[VerGraph] returns a canonicalized MMA graph.  This may involved dotting edges.  This function is memoized but the cache is cleared by RunGraphSetup.";
 
 GetExtVerts::usage="GetExtVerts[VerGraph] returns the external vertices (or equivalently the outgoing momenta) of a VerGraph.";
 
@@ -236,8 +236,11 @@ Graph[Flatten[Join[inequivalentEdges,Table[i++;{UndirectedEdge[edge[[1]],h[i]],U
 MultigraphDisambiguate[MMAGraph_]:=FixedPoint[MultigraphDisambiguateHelper,MMAGraph];
 
 
-ClearAll[VerGraphHashCode,VerGraphHashCodeCache];
-VerGraphHashCode[VerGraph[VerList_]]:=VerGraphHashCodeCache[VerGraph[VerList]]=VerGraph[VerList]//VerGraphToMMAGraph//MultigraphDisambiguate//CanonicalGraph;
+(*Clear[VerGraphHashCode];*)
+
+DefineVerGraphHashCode:=(
+VerGraphHashCode[VerGraph[VerList_]]:=VerGraphHashCode[VerGraph[VerList]]=VerGraph[VerList]//VerGraphToMMAGraph//MultigraphDisambiguate//CanonicalGraph;
+);
 
 
 GetExtVerts[VerGraph[VerList_]]:=Select[VerList,#/.VerF[x__]:>Length[{x}]==1&];
@@ -513,7 +516,10 @@ FindVerGraphSpanningAutomorphisms[graph_]:=FindVerGraphMorphisms[graph,graph,Fin
 
 RunGraphSetup[n_,l_,MomentumHead_]:=Module[{a=MomentumHead},
 
-ClearAll[GenNkMCGraphsOfCutsCache,VerGraphHashCodeCache];(*Clear the caches of these functions because if you change CubicBasisGraphs you probably don't need to store the VerGraphHaseCodes any more and you definitely don't want to store GenNkMCGraphsOfCuts.*)
+ClearAll[GenNkMCGraphsOfCuts,VerGraphHashCode];(*Clear the caches of these functions because if you change CubicBasisGraphs you probably don't need to store the VerGraphHaseCodes any more and you definitely don't want to store GenNkMCGraphsOfCuts.*)
+
+DefineGenNkMCGraphsOfCuts;
+DefineVerGraphHashCode;
 
 AddLVecHeads[a];
 Print["Added ", a," to LVecHeads"];
@@ -715,7 +721,7 @@ GraphSymRelation//NumeratorsToMasterNumerators//RepNumFunc//RepGraphKin[graph]//
 (*Unordered and color ordered tree graph generation*)
 
 
-ClearAll[UnorderedCubicGraphs];
+(*Clear[UnorderedCubicGraphs];*)
 
 UnorderedCubicGraphs[3,MomentumHead_]:=UnorderedCubicGraphs[3,MomentumHead]=GenCubicTreeTopologies[3,MomentumHead];
 
@@ -733,7 +739,7 @@ UnorderedCubicGraphs[n_,MomentumHead_]:=UnorderedCubicGraphs[n,MomentumHead]=Mod
 (*You will have to keep track of internal labels.*)
 
 
-Clear[OrderedCubicGraphs];
+(*Clear[OrderedCubicGraphs];*)
 
 OrderedCubicGraphs[3,MomentumHead_]:=OrderedCubicGraphs[3,MomentumHead]=GenCubicTreeTopologies[3,MomentumHead];
 
@@ -870,9 +876,12 @@ Outer[joinGraphs,##]&@@VerticesWithPermutedLabels//Flatten//#/.joinGraphs[x__]:>
 This is slight overkill because you only need to permute blobs with more than 4 *internal* legs.  Permuting external legs on a blob won't do anything because you already enforced graph symmetries.*)
 
 
-ClearAll[GenNkMCGraphsOfCuts,GenNkMCGraphsOfCutsCache];
+(*Clear[GenNkMCGraphsOfCuts];*)
+
+DefineGenNkMCGraphsOfCuts:=(
 GenNkMCGraphsOfCuts[k_]:=
-GenNkMCGraphsOfCutsCache[k]=CubicBasisGraphs//Nest[PinchOneEdgeOnSetOfGraphs,#,k]&//Select[#,(!GraphOfCutsHasBlownUpZeroPropQ[#])&]&//GenInternalLabelingsOfGraphOfCuts/@#&//Flatten;
+GenNkMCGraphsOfCuts[k]=CubicBasisGraphs//Nest[PinchOneEdgeOnSetOfGraphs,#,k]&//Select[#,(!GraphOfCutsHasBlownUpZeroPropQ[#])&]&//GenInternalLabelingsOfGraphOfCuts/@#&//Flatten;
+);
 
 
 (* ::Text:: *)
@@ -916,7 +925,8 @@ denom=d2/@UncutMomenta//Times@@#&;
 (*End*)
 
 
-End[]
-EndPackage[]
+End[];
+
+EndPackage[];
 
 Print["\n ---- PHYS GRAPH ---- \n\n The Phys Graph (or physics graph) package implements graph code for calculating scattering amplitudes.  The main purpose is to calculate BCJ representations of loop integrands so the pacakge includes code for graph symmetries (and isomorphisms), cuts, and Jacobi relations."];
