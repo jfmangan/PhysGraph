@@ -51,7 +51,7 @@ BeginPackage["PhysGraph`",{"Amplitudes`"}]
 
 VerGraph::usage="VerGraph[VerList] is the Head associated with a vertex graph of vertices {VerF[a,b,c],VerF[-c,d,e]...}";
 
-VerF::usage="VerF[a,b,c] is the Head associated with a vertex with momentum/edge labels {a,b,c}.  The 'F' in 'VerF' stands for f^abc because (at least at 3pt) the arguments of VerF are treated as though they are cyclically invariant and totally antisymmetric.  For quartic (or higher) vertex, the labels are still treated as cyclically invariant but no other symmetries are assymed.  This is important when working with higher point blobs in cuts.  This is handled by GenInternalLabelingsOfGraphOfCuts.";
+VerF::usage="VerF[a,b,c] is the Head associated with a vertex with momentum/edge labels {a,b,c}.  The 'F' in 'VerF' stands for f^abc because (at least at 3pt) the arguments of VerF are treated as though they are cyclically invariant and totally antisymmetric.  For quartic (or higher) vertex, the labels are still treated as cyclically invariant but no other symmetries are assumed.  This is important when working with higher point blobs in cuts.  This is handled by GenInternalLabelingsOfGraphOfCuts.";
 
 VerGraphToMMAGraph::usage="VerGraphToMMAGraph[VerGraph] converts a VerGraph to MMA's default graph type.";
 
@@ -207,9 +207,6 @@ Begin["`Private`"]
 (*Graph generation and general things*)
 
 
-VerGraphToMMAGraph[VerGraph[VerList_]]:=Graph[UndirectedEdge@@@Table[VerList[[#]]&/@First/@Position[VerList,vert],{vert,VerList/.-x_:>x/.VerF->List//Flatten//DeleteDuplicates}]];(*Needs to capture tadpoles and the 3pt correctly so you have to use this ugly solution*)
-
-
 GenCubicTreeTopologies[n_,MomHead_]:=Module[{a=MomHead,groupings,f,i,graphs,ExtVerts},
 groupings=Groupings[Array[a,n-1],f->{2,Orderless}];
 graphs=Table[i=n-1;
@@ -327,7 +324,7 @@ IntMomenta=Complement[VerList/.-x_:>x/.VerF->List//Flatten//DeleteDuplicates,Ext
 (*1391 -- no tadpoles*)
 (*815 -- no tadpoles or bubbles on external legs*)
 (**)
-(*3 legs, 3 loops *)
+(*3 legs, 3 loops*)
 (*147*)
 (*45 -- no tadpoles*)
 (*17 -- no tadpoles or bubbles on external legs*)
