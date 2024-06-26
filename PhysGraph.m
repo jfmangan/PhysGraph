@@ -14,22 +14,23 @@ BeginPackage["PhysGraph`",{"Amplitudes`"}]
 (* ::Text:: *)
 (*VerGraph means a vertex graph.*)
 (**)
-(*VerF[a,b,c...] is the Head used in VerGraph for representing an oriented n-pt vertex.  Cyclical order doesn't matter but swaps are associated with a minus sign just like f^abc.  So the name is "VerF" where "Ver" is for vertex and "F" is for fabc.  Note that external/single vertices like VerF[p[1]] are included in VerGraph.*)
-(*VerGraph[{VerF[...],VerF[...]...}] represents a graph with vertices VerF[].  It is not an MMA graph.*)
+(*Ver[EdgeList, VerType] is the Head used to represent vertices.  EdgeList looks like the list of edges connected to the vertex, i.e., {a,b,c...}.  VerType can just be VerF right now where VerF is a Symbol.  The F in VerF refers to fabc.  If a vertex is type VerF the vertex is mean to be oriented.  Cyclical order doesn't matter but swaps are associated with a minus sign just like f^abc.  Note that external/single vertices like Ver[{p[1]},VerF] are included in VerGraph.  VerGraph[{Ver[...],Ver[...]...}] represents a graph with vertices Ver[].  It is not an MMA graph.*)
 (**)
-(*^^This is all true for VerF[a,b,c] but for 4 or more legs some of this isn't true.  This can become an issue for cuts where internal blobs have 4 or more legs but this issue is handled in GenInternalLabelingsOfGraphOfCuts.*)
+(*^^This is all true for Ver[{a,b,c},VerF] but for 4 or more legs some of this isn't true.  This can become an issue for cuts where internal blobs have 4 or more legs but this issue is handled in GenInternalLabelingsOfGraphOfCuts.*)
 (**)
-(*I'm choosing a clockwise convention for the edges a,b,c... in VerF[a,b,c...].  MMA internally choose counterclockwise I think.*)
+(*I'm choosing a clockwise convention for the edges a,b,c... in Ver[{a,b,c...},VerType].  MMA internally choose counterclockwise I think.*)
+(**)
+(*The VerType shouldn't matter if Ver is only connected to one edge.*)
 (**)
 (*All outgoing convention.*)
 (**)
-(*Label edges in vertices with signs for outgoing (positive) or incoming (negative).  This means that external vertices look like VerF[-a[x]] if you follow the all outgoing convention.  This will get messed up in a cut where you'll have a pair like VerF[-a[x]] and VerF[a[x]].*)
+(*Label edges in vertices with signs for outgoing (positive) or incoming (negative).  This means that external vertices look like Ver[{-a[x]},VerType] if you follow the all outgoing convention.  This will get messed up in a cut where you'll have a pair like Ver[{-a[x]},VerType] and Ver[{a[x]},VerType].*)
 (**)
-(*If you have graphs like VerGraph[{VerF[-a[x]...}] or VerGraph[{VerF[-p[x]...}] then you need to add a or p to LVecHeads!*)
+(*If you have graphs like VerGraph[{Ver[{-a[x]},VerType]...}] or VerGraph[{Ver[{-p[x]...},VerType]...}] then you need to add a or p to LVecHeads!*)
 
 
 (* ::Text:: *)
-(*Remember that graphs store an internal sign based on the orientation of the legs in all of the VerFs.  So when you display a graph there could still be a hidden sign compared to what the graph looks like.*)
+(*Remember that graphs store an internal sign based on the orientation of the legs in all of the Vers.  So when you display a graph there could still be a hidden sign compared to what the graph looks like.*)
 
 
 (* ::Text:: *)
@@ -49,71 +50,77 @@ BeginPackage["PhysGraph`",{"Amplitudes`"}]
 (*Usage notes*)
 
 
-VerGraph::usage="VerGraph[VerList] is the Head associated with a vertex graph of vertices {VerF[a,b,c],VerF[-c,d,e]...}";
+VerGraph::usage = "VerGraph[VerList] is the Head associated with a vertex graph of vertices {Ver[{a,b,c},VerType],Ver[{-c,d,e},VerType]...}";
 
-VerF::usage="VerF[a,b,c] is the Head associated with a vertex with momentum/edge labels {a,b,c}.  The 'F' in 'VerF' stands for f^abc because (at least at 3pt) the arguments of VerF are treated as though they are cyclically invariant and totally antisymmetric.  For quartic (or higher) vertex, the labels are still treated as cyclically invariant but no other symmetries are assumed.  This is important when working with higher point blobs in cuts.  This is handled by GenInternalLabelingsOfGraphOfCuts.";
+Ver::usage = "Ver[{a,b,c},VerType] is the Head associated with a vertex with momentum/edge labels {a,b,c}.  The vertex can be either type VerF or VerD which correspond to f^abc and d^abc type vertices respectively.  At least at 3pt the arguments of a VerF type vertex are treated as though they are cyclically invariant and totally antisymmetric.  For quartic (or higher) vertex, the labels are still treated as cyclically invariant but no other symmetries are assumed.  This is important when working with higher point blobs in cuts.  This is handled by GenInternalLabelingsOfGraphOfCuts.  VerD was added later so there may be issues here but generally VerD vertices should be totally symmetric at least at 3pt.";
 
-VerGraphToMMAGraph::usage="VerGraphToMMAGraph[VerGraph] converts a VerGraph to MMA's default graph type.";
+VerF::usage = "VerF is the Symbol used as a VerType in Ver[{a,b,c},VerType] to specify that the vertex should be treated like an f^abc vertex.";
 
-MultigraphDisambiguate::usage="MultigraphDisambiguate[MMAGraph] takes a MMA Graph and adds dots to edges (spurious vertices to propagators) to turn a Mulitgraph into a normal graph.";
+VerD::usage = "VerD is the Symbol used as a VerType in Ver[{a,b,c},VerType] to specify that the vertex should be treated like a d^abc vertex.";
 
-VerGraphHashCode::usage="VerGraphHashCode[VerGraph] returns a canonicalized MMA graph.  This may involved dotting edges.  This function is memoized but the cache is cleared by RunGraphSetup.";
+MultigraphDisambiguate::usage = "MultigraphDisambiguate[MMAGraph] takes a MMA Graph and adds dots to edges (spurious vertices to propagators) to turn a Mulitgraph into a normal graph.";
 
-GetExtVerts::usage="GetExtVerts[VerGraph] returns the external vertices (or equivalently the outgoing momenta) of a VerGraph.";
+VerGraphHashCode::usage = "VerGraphHashCode[VerGraph] returns a canonicalized MMA graph.  This may involve dotting edges.  This function is memoized but the cache is cleared by RunGraphSetup.  You must run RunGraphSetup before using VerGraphHashCode.";
 
-GenCubicTopologies::usage="GenCubicTopologies[n,l,MomHead] will generate the n-pt l-loop distinct cubic graph topologies with momenta labeled by MomHead.";
+VerGraphHashCodeWithVers::usage = "VerGraphHashCodeWithVers[VerGraph] returns a list of a canonicalized MMA graph along with a canonicalized assignment of vertex types to that MMA graph.  The MMA graph may involve dotting edges.  This function is memoized but the cache is cleared by RunGraphSetup.  You must run RunGraphSetup before using VerGraphHashCodeWithVers.";
 
-MomConsRepRules::usage="MomConsRepRules[VerGraph,MomToSolveFor:{}] gives momentum conservation rules for VerGraph where the (optional) list of momenta MomToSolveFor have been eliminated.";
+GetExtVerts::usage = "GetExtVerts[VerGraph] returns the external vertices (or equivalently the outgoing momenta) of a VerGraph.";
 
-dRepRules::usage="dRepRules[VerGraph,AdditionalConstraints:{},MomToSolveFor:{}] returns the replacement rules on the dot products of momenta d[p[x],p[y]] that enforces on-shell constraints.  The replacement rule does not work on polarization vectors.  Note that you need to call MomConsRepRules first.  AdditionalConstraints is an optional list of constraints to impose.  This is useful for doing cuts.  MomToSolveFor is an optional list of momenta to explicitly eliminate.  Since you need to call MomConsRepRules first, make sure to use the same MomToSolveFor in both functions or you will get inconsistent bases from MomConsRepRules and dRepRules.";
+GenCubicTopologies::usage = "GenCubicTopologies[n,l,MomHead,VerTypeList] will generate the n-pt l-loop distinct cubic graph topologies with momenta labeled by MomHead.  VerTypeList is intended to be {VerF} or {VerF, VerD} etc.  Bubbles on external legs and tadpoles are excluded.";
 
-RepGraphKin::usage="RepGraphKin[graph][expr] conserves momentum and replaces the dot products of momenta associated with graph in the expression expr.  This is equivalent to a call to MomConsRepRules and then dRepRules.";
+MomConsRepRules::usage = "MomConsRepRules[VerGraph,MomToSolveFor:{}] gives momentum conservation rules for VerGraph where the (optional) list of momenta MomToSolveFor have been eliminated.";
 
-MandelstamBasisOfGraph::usage="MandelstamBasisOfGraph[VerGraph] returns the basis of momentum dot products associated with the graph VerGraph.  This is the basis used by MomConsRepRules, dRepRules, and RepGraphKin.";
+dRepRules::usage = "dRepRules[VerGraph,AdditionalConstraints:{},MomToSolveFor:{}] returns the replacement rules on the dot products of momenta d[p[x],p[y]] that enforces on-shell constraints.  The replacement rule does not work on polarization vectors.  Note that you need to call MomConsRepRules first.  AdditionalConstraints is an optional list of constraints to impose.  This is useful for doing cuts.  MomToSolveFor is an optional list of momenta to explicitly eliminate.  Since you need to call MomConsRepRules first, make sure to use the same MomToSolveFor in both functions or you will get inconsistent bases from MomConsRepRules and dRepRules.";
 
-TadpoleQ::usage="TadpoleQ[VerGraph] returns True if there is a tadpole in the graph VerGraph";
+RepGraphKin::usage = "RepGraphKin[graph][expr] conserves momentum and replaces the dot products of momenta associated with graph in the expression expr.  This is equivalent to a call to MomConsRepRules and then dRepRules.";
 
-TadpoleOrBubbleOnExtLegQ::usage="TadpoleOrBubbleOnExtLegQ[VerGraph] returns True if the graph VerGraph contains either a tadpole or a bubble on an external leg.";
+MandelstamBasisOfGraph::usage = "MandelstamBasisOfGraph[VerGraph] returns the basis of momentum dot products associated with the graph VerGraph.  This is the basis used by MomConsRepRules, dRepRules, and RepGraphKin.";
 
-GraphSignature::usage="GraphSignature[VerGraph] returns the signature (+1 or -1) of the graph VerGraph.  This sign has to do with how vertices of VerGraph are oriented.";
+TadpoleQ::usage = "TadpoleQ[VerGraph] returns True if there is a tadpole in the graph VerGraph";
 
-VerGraphToMMAGraph::usage="VerGraphToMMAGraph[VerGraph] converts a VerGraph to an MMA graph.";
+TadpoleOrBubbleOnExtLegQ::usage = "TadpoleOrBubbleOnExtLegQ[VerGraph] returns True if the graph VerGraph contains either a tadpole or a bubble on an external leg.";
 
-VerGraphToEdgeGraph::usage="VerGraphToEdgeGraph[VerGraph] converts a VerGraph to an EdgeGraph.";
+GraphSignature::usage = "GraphSignature[VerGraph] returns the signature (+1 or -1) of the graph VerGraph.  This sign has to do with how vertices of VerGraph are oriented.";
 
-EdgeGraphToVerGraph::usage="EdgeGraphToVerGraph[EdgeGraph] converts an EdgeGraph to a VerGraph";
+VerGraphToMMAGraph::usage = "VerGraphToMMAGraph[VerGraph] converts a VerGraph to an MMA graph.";
 
-PrintEdgeGraph::usage="PrintEdgeGraph[EdgeGraph] prints the edge graph EdgeGraph along with momentum/edge labels and their directions.  The output is far from perfect.";
+VerGraphToEdgeGraph::usage = "VerGraphToEdgeGraph[VerGraph] converts a VerGraph to an EdgeGraph.";
 
-VerGraphMultigraphDisambiguate::usage="VerGraphMultigraphDisambiguate[VerGraph] adds dots (fictitious 2pt vertices) to edges so that VerGraph isn't a Multigraph.  The function returns a VerGraph.";
+EdgeGraphToVerGraph::usage = "EdgeGraphToVerGraph[EdgeGraph] converts an EdgeGraph to a VerGraph";
 
-FindVerGraphIsomorphisms::usage="FindVerGraphIsomorphisms[VerGraphSource,VerGraphTarget] finds an isomorphism from VerGraphSource to VerGraphTarget.";
+PrintEdgeGraph::usage = "PrintEdgeGraph[EdgeGraph] prints the edge graph EdgeGraph along with momentum/edge labels and their directions.  The output is far from perfect.  VerF vertices are blue and VerD vertices are red.";
 
-FindVerGraphSpanningAutomorphisms::usage="FindVerGraphSpanningAutomorphisms[VerGraph] finds a set of automorphisms on VerGraph.  I try to find the smallest set of automorphisms so that when you compose them you can get any automorphism however there is still some redundancy.  The reason for all of this is to try to generate as few redundant constraints when imposing graph symmetries on numerator ansatze.";
+VerGraphMultigraphDisambiguate::usage = "VerGraphMultigraphDisambiguate[VerGraph] adds dots (fictitious 2pt vertices) to edges so that VerGraph isn't a Multigraph.  The function returns a VerGraph.";
 
-RunGraphSetup::usage="RunGraphSetup[n,l,MomentumHead] applies AddLVecHeads to MomentumHead and populates CubicBasisGraphs, CanonicalNumeratorVariables, BasisGraphNumeratorPairs, and BasisMMAGraphNumeratorPairs.  This function must be run before generating graph symmetries, Jacobi relations, or doing cuts.  CubicBasisGraphs is the set of cubic n-pt l-loop graphs with no tadpoles or bubbles on external legs.  CanonicalNumeratorVariables is a list that loos like {p[1], p[2]...} where p is MomentumHead.  The numerator associated with CubicBasisGraphs[[i]] is num[i][CanonicalNumeratorVariables].  BasisGraphNumeratorPairs is the List of {CubicBasisGraph[[i]],num[i][CanonicalNumeratorVariables]}.  BasisMMAGraphNumeratorPairs is the same as BasisGraphNumeratorPairs but each CubicBasisGraph replaced with its VerGraphHashCode.  RunGraphSetup also clears the caches of the memoized functions GenNkMCGraphsOfCuts and VerGraphHashCode.  If you change CubicBasisGraphs then you definitely need to clear the cache for GenNkMCGraphsOfCuts and you probably don't need the cached values of VerGraphHashCode any more either.";
+FindVerGraphIsomorphisms::usage = "FindVerGraphIsomorphisms[VerGraphSource,VerGraphTarget] finds an isomorphism from VerGraphSource to VerGraphTarget.";
 
-CubicBasisGraphs::usage="CubicBasisGraphs is the set of cubic n-pt l-loop graphs with no tadpoles or bubbles on external legs.  CubicBasisGraphs is populated by RunGraphSetup.";
+FindVerGraphSpanningAutomorphisms::usage = "FindVerGraphSpanningAutomorphisms[VerGraph] finds a set of automorphisms on VerGraph.  I try to find the smallest set of automorphisms so that when you compose them you can get any automorphism however there is still some redundancy.  The reason for all of this is to try to generate as few redundant constraints when imposing graph symmetries on numerator ansatze.  I would not use this function with any VerD graphs.";
 
-CanonicalNumeratorVariables::usage="CanonicalNumeratorVariables is a list that loos like {p[1], p[2]...} where p is MomentumHead.  The numerator associated with CubicBasisGraphs[[i]] is num[i][CanonicalNumeratorVariables].  CanonicalNumeratorVariables is populated by RunGraphSetup.";
+RunGraphSetup::usage = "RunGraphSetup[n,l,MomentumHead,VerTypesList] applies AddLVecHeads to MomentumHead and populates CubicBasisGraphs, CanonicalNumeratorVariables, BasisGraphNumeratorPairs, and VerGraphHashCodeWithVersToBasisGraph.  This function must be run before generating graph symmetries, Jacobi relations, or doing cuts.  CubicBasisGraphs is the set of cubic n-pt l-loop graphs with no tadpoles or bubbles on external legs.  VerTypesList looks like {VerF} or {VerF,VerD} depending on whether you want internal vertices to be all VerF or if they can be VerF or VerD.  RunGraphSetup sets the 'global' variable IntVerTypesList to be VerTypesList.  IntVerTypesList is used elsewhere by other functions.  CanonicalNumeratorVariables is a list that loos like {p[1], p[2]...} where p is MomentumHead.  The numerator associated with CubicBasisGraphs[[i]] is num[i][CanonicalNumeratorVariables].  BasisGraphNumeratorPairs is the List of {CubicBasisGraph[[i]],num[i][CanonicalNumeratorVariables]}.  VerGraphHashCodeWithVersToBasisGraph is a set of rules mapping VerGraphHashCodeWithVers to a CubicBasisGraph.  VerGraphHashCodeWithVersToBasisGraph is used internally in FindVerGraphNumerator.  RunGraphSetup also clears the caches of the memoized functions GenNkMCGraphsOfCuts, VerGraphHashCode, and VerGraphHashCodeWithVers.  If you change CubicBasisGraphs then you definitely need to clear the cache for GenNkMCGraphsOfCuts and you probably don't need the cached values of VerGraphHashCode any more either.  You must run RunGraphSetup before using the hash code or cut functions.";
 
-BasisGraphNumeratorPairs::usage="BasisGraphNumeratorPairs is the List of {CubicBasisGraph[[i]],num[i][CanonicalNumeratorVariables]}.  BasisGraphNumeratorPairs is populated by RunGraphSetup.";
+IntVerTypesList::usage = "IntVerTypesList is a 'global' variable set by RunGraphSetup.  IntVerTypesList looks like {VerF} or {VerF, VerD} etc. depending on what type of internal cubic vertices are allowed in your graphs.  IntVerTypesList is used by various functions.";
 
-BasisMMAGraphNumeratorPairs::usage="BasisMMAGraphNumeratorPairs is the same as BasisGraphNumeratorPairs but each CubicBasisGraph replaced with its VerGraphHashCode and each num[i][...] replaced with just num[i].  BasisMMAGraphNumeratorPairs is populated by RunGraphSetup.";
+VerGraphHashCodeWithVersToBasisGraph::usage="VerGraphHashCodeWithVersToBasisGraph is a set of rules mapping VerGraphHashCodeWithVers to a CubicBasisGraph.  VerGraphHashCodeWithVersToBasisGraph is used internally in FindVerGraphNumerator.  VerGraphHashCodeWithVersToBasisGraph is populated by RunGraphSetup.";
 
-num::usage="num[4][{p[2], p[5]...}] is the Head used to represent a graph numerator.  The argument is a list of momentum labels.  num[i][CanonicalNumeratorLabels] corresponds to the numerator of CubicBasisGraph[[i]].  Relabeling the momentum labels of num[i] is supposed to correspond to an isomorphism (or momentum relabeling) of CubicBasisGraph[[i]].";
+CubicBasisGraphs::usage = "CubicBasisGraphs is the set of cubic n-pt l-loop graphs with no tadpoles or bubbles on external legs.  CubicBasisGraphs is populated by RunGraphSetup.";
 
-PinchSpecifiedEdge::usage="PinchSpecifiedEdge[VerGraph,edge] pinches edge (for example edge=p[7]) in VerGraph.  In other words collapses this function collapses propagators.";
+CanonicalNumeratorVariables::usage = "CanonicalNumeratorVariables is a list that loos like {p[1], p[2]...} where p is MomentumHead.  The numerator associated with CubicBasisGraphs[[i]] is num[i][CanonicalNumeratorVariables].  CanonicalNumeratorVariables is populated by RunGraphSetup.";
 
-PinchOneEdge::usage="PinchOneEdge[VerGraph] returns every graph that can be obtained by pinching one edge (or collpasing one propagator) of VerGraph.";
+BasisGraphNumeratorPairs::usage = "BasisGraphNumeratorPairs is the List of {CubicBasisGraph[[i]],num[i][CanonicalNumeratorVariables]}.  BasisGraphNumeratorPairs is populated by RunGraphSetup.";
 
-PinchOneEdgeOnSetOfGraphs::usage="PinchOneEdgeOnSetOfGraphs[VerGraphList] takes a list of VerGraphs and returns every graph that can be obtained by pinching one edge (or collapsing one propagator) of one of the input graphs.  This is equivalent to running PinchOneEdge on all of the graphs and modding out by isomorphisms.";
+num::usage = "num[4][{p[2], p[5]...}] is the Head used to represent a graph numerator.  The argument is a list of momentum labels.  num[i][CanonicalNumeratorLabels] corresponds to the numerator of CubicBasisGraph[[i]].  Relabeling the momentum labels of num[i] is supposed to correspond to an isomorphism (or momentum relabeling) of CubicBasisGraph[[i]].";
 
-BlowUpVertexIntoJacobiTriplet::usage="BlowUpVertexIntoJacobiTriplet[VerGraph] takes a VerGraph that is assumed to have exactly one quartic vertex.  It blows up that vertex in the s, t, and u channels and returns the resulting three VerGraphs.  The leg inserted when blowing up the graph is EdgeInsertedInJacobi which is set by RunJacobiSetup.";
+PinchSpecifiedEdge::usage = "PinchSpecifiedEdge[VerGraph,edge] pinches edge (for example edge=p[7]) in VerGraph.  In other words collapses this function collapses propagators.";
 
-FindVerGraphNumerator::usage="FindVerGraphNumerator[VerGraph] takes any labeling of VerGraph and returns the associated numerator num[i][labeling] with the corresponding labeling.";
+PinchOneEdge::usage = "PinchOneEdge[VerGraph] returns every graph that can be obtained by pinching one edge (or collpasing one propagator) of VerGraph.";
 
-FindConstructibleNumerators::usage="FindConstructibleNumerators[nums] takes a list of numerators in simplified notation {num[1],num[4]...} and generates every numerator that can be obtained by using Jacobi relations.  This function relies on SimplifiedJacobis which is set up by RunJacobiSetup.";
+PinchOneEdgeOnSetOfGraphs::usage = "PinchOneEdgeOnSetOfGraphs[VerGraphList] takes a list of VerGraphs and returns every graph that can be obtained by pinching one edge (or collapsing one propagator) of one of the input graphs.  This is equivalent to running PinchOneEdge on all of the graphs and modding out by isomorphisms.";
+
+BlowUpVertexIntoJacobiTriplet::usage = "BlowUpVertexIntoJacobiTriplet[VerGraph] takes a VerGraph that is assumed to have exactly one quartic vertex.  It blows up that vertex in the s, t, and u channels and returns the resulting three VerGraphs.  The leg inserted when blowing up the graph is EdgeInsertedInJacobi which is set by RunJacobiSetup.";
+
+FindVerGraphNumerator::usage = "FindVerGraphNumerator[VerGraph] takes any labeling of VerGraph and returns the associated numerator num[i][labeling] with the corresponding labeling.";
+
+FindConstructibleNumerators::usage = "FindConstructibleNumerators[nums] takes a list of numerators in simplified notation {num[1],num[4]...} and generates every numerator that can be obtained by using Jacobi relations.  This function relies on SimplifiedJacobis which is set up by RunJacobiSetup.";
 
 
 RunJacobiSetup::usage="RunJacobiSetup[IncludeTadpoleBELJacobis] runs all of the Jacobi setup code including setting up EdgeInsertedInJacobi, JacobiRelationsOnGraphs, JacobiRelationsOnNumerators, and SimplifiedJacobis. If IncludeTadpoleBELJacobis is False then you only keep Jacobis of length 3, that is, you ignore solving any Jacobi involving a tadpole or a bubble on external leg (BEL). If IncludeTadpoleBELJacobis is True then you solve all Jacobi relations (even those involving tadpoles or BELs) but you hardcode the numerators of tadpoles and BELs to zero.";
@@ -144,13 +151,13 @@ RunNumeratorsToMasterNumeratorsSetup::usage="RunNumeratorsToMasterNumeratorsSetu
 EvaluateJacobi::usage="EvaluateJacobi[jacobi, RepNumFunc].  Here jacobi is a list of numerators appearing in a Jacobi relation {num[1][...],-num[2][...],-num[7][...]}.  For example jacobi could come from JacobiRelationsOnNumerators.  RepNumFunc[expression] (replace numerator function) is a function that turns every element of nBasis into an actual expression in terms of Mandelstams.  RepNumFunc is probably the function that inserts your actual ansatz.  EvaluateJacobi returns the CoefficientArrays of the Jacobi relation over the MandelstamBasis of the pinched graph associated with the Jacobi relation.  Before calling EvaluateJacobi you need to RunNumeratorsToMasterNumeratorsSetup first.";
 
 
-RunGraphSymSetup::usage="RunGraphSymSetup sets up the graph symmetries by populating GraphSymRelationsOnNumerators and GraphSymRelationsOnNumeratorsSorted.  NumeratorsToMasterNumerators must have been set up first.";
+RunGraphSymSetup::usage = "RunGraphSymSetup sets up the graph symmetries by populating GraphSymRelationsOnNumerators and GraphSymRelationsOnNumeratorsNontrivial.  NumeratorsToMasterNumerators must have been set up first.";
 
-GraphSymRelationsOnNumerators::usage="GraphSymRelationsOnNumerators is a list of graph symmetry relations on the numerators num[...][...].  Each entry in the list represents an equation of the form num[][]+num[][]==0.  GraphSymRelationsOnNumerators is populated by RunGraphSymSetup.";
+GraphSymRelationsOnNumerators::usage = "GraphSymRelationsOnNumerators is a list of graph symmetry relations on the numerators num[...][...].  Each entry in the list represents an equation of the form num[][]+num[][]==0.  GraphSymRelationsOnNumerators is populated by RunGraphSymSetup.";
 
-GraphSymRelationsOnNumeratorsSorted::usage="GraphSymRelationsOnNumeratorsSorted takes GraphSymRelationsOnNumerators and looks at what they would look like after using NumeratorsToMasterNumerators to go to the basis of numerators in nBasis.  The graph symmetry equations are then sorted by length.  Graph symmetry equations that are trivially satisfied are discarded.  GraphSymRelationsOnNumeratorsSorted returns the the graph symmetries in terms of the original numerators (before NumeratorsToMasterNumerators was applied) so that you can identify what graph kinematics to use when solving the graph symmetry.  Sorting the equations means that you will keep the sparsest ones when finding the linearly independent equations using my solver.  NumeratorsToMasterNumerators must be set up before using GraphSymRelationsOnNumeratorsSorted.  GraphSymRelationsOnNumeratorsSorted is populated by RunGraphSymSetup.";
+GraphSymRelationsOnNumeratorsNontrivial::usage = "GraphSymRelationsOnNumeratorsNontrivial takes GraphSymRelationsOnNumerators and discards any relations that are trivially satisfied after applying NumeratorsToMasterNumerators.  GraphSymRelationsOnNumeratorsNontrivial returns the the graph symmetries in terms of the original numerators (before NumeratorsToMasterNumerators was applied) so that you can identify what graph kinematics to use when solving the graph symmetry.  NumeratorsToMasterNumerators must be set up before using GraphSymRelationsOnNumeratorsNontrivial.  GraphSymRelationsOnNumeratorsNontrivial is populated by RunGraphSymSetup.";
 
-EvaluateGraphSymRelation::usage="EvaluateGraphSymRelation[GraphSymRelation,RepNumFunc].  Here GraphSymRelation (graph symmetry relation) is one of the entries in GraphSymRelationsOnNumerators or GraphSymRelationsOnNumeratorsSorted.  RepNumFunc[expression] (replace numerator function) is a function that turns every element of nBasis into an actual expression in terms of Mandelstams.  RepNumFunc is probably the function that inserts your actual ansatz.  EvaluateGraphSymRelation returns the CoefficientArrays of the GraphSymRelation over the MandelstamBasis of the graph associated with GraphSymRelation.  Before calling EvaluateGraphSymRelation you need to RunGraphSymSetup first.";
+EvaluateGraphSymRelation::usage = "EvaluateGraphSymRelation[GraphSymRelation,RepNumFunc].  Here GraphSymRelation (graph symmetry relation) is one of the entries in GraphSymRelationsOnNumerators or GraphSymRelationsOnNumeratorsNontrivial.  RepNumFunc[expression] (replace numerator function) is a function that turns every element of nBasis into an actual expression in terms of Mandelstams.  RepNumFunc is probably the function that inserts your actual ansatz.  EvaluateGraphSymRelation returns the CoefficientArrays of the GraphSymRelation over the MandelstamBasis of the graph associated with GraphSymRelation.  Before calling EvaluateGraphSymRelation you need to RunGraphSymSetup first.";
 
 
 RepListIncludingSigns::usage="RepListIncludingSigns[ListOld,ListNew] generates a set of replacement rules to replace the elements of ListOld with those of ListNew.  You have to be very careful when using RepListIncludingSigns because ListOld can only contain things like p[3] or -p[7] not p[1]-p[2].";
@@ -192,6 +199,9 @@ CutLHS::usage="CutLHS[GraphOfCuts, AmpHead] returns the cut constructed from tre
 CutRHS::usage="CutRHS[GraphOfCuts,NumRepFunc] returns the cut constructed from the numerators of CubicBasisGraphs.  The cut is represented by GraphOfCuts where every drawn propagator is cut and the vertices represent blobs.  The cut is returned in the basis given by MandelstamBasisOfGraphOfCuts[GraphOfCuts].  NumRepFunc is a function that takes any num[...][...] and converts it into the desired representation.  For example NumRepFunc=Identity will return the cut in terms of num[][] which can be useful for debugging.  Alternatively something like NumRepFunc=RepNumAnsatz[NumeratorsToMasterNumerators[#]]& will explicitly evaluate the cut in terms of some ansatz where NumeratorsToMasterNumerators first converts any num[][] into a basis num[][] and RepNumAnsatz replaces the basis num[][] with an actual ansatz.";
 
 
+VerToEdgeList::usage="Should be Private but I'm making it public for debugging reasons.";
+
+
 Begin["`Private`"]
 
 
@@ -207,13 +217,26 @@ Begin["`Private`"]
 (*Graph generation and general things*)
 
 
+(* ::Text:: *)
+(*When you have multiple kinds of vertices like VerD and VerF you can striate the Jacobis and graph symmetries based on SortedVerCounts which will decrease the size of the systems you have to solve.  Only unitarity mixes between different numbers of VerF and VerD.  In other words there is a sort of sector decomposition based on the number of VerF and VerD in a graph.*)
+
+
+(*SortedVerCounts[VerGraph[VerList_List]]:=VerList/.Ver[_,verType_]:>verType//Counts//Sort;
+(*Counts isn't sorted by default so you have to Sort it.*)
+
+VerGraphMetadata[VerGraph[VerList_List]]:=VerGraph[VerList]//{SortedVerCounts[#],VerGraphHashCode[#]}&;*)
+
+
+VerToEdgeList[expr_]:=expr/.Ver[edgeList_List,_]:>edgeList;
+
+
 GenCubicTreeTopologies[n_,MomHead_]:=Module[{a=MomHead,groupings,f,i,graphs,ExtVerts},
 groupings=Groupings[Array[a,n-1],f->{2,Orderless}];
 graphs=Table[i=n-1;
-group//.f[g_[x_],h_[y_]]:>(i++;Sow[VerF[g[x],h[y],-a[i]]];a[i])//Reap//Last//Last
+group//.f[g_[x_],h_[y_]]:>(i++;Sow[Ver[{g[x],h[y],-a[i]},VerF]];a[i])//Reap//Last//Last
 ,{group,groupings}]/.-a[i]:>a[i];
 
-ExtVerts=Join[VerF[-#]&/@Array[a,n-1],{VerF[-a[i]]}];
+ExtVerts=Join[Ver[{-#},VerF]&/@Array[a,n-1],{Ver[{-a[i]},VerF]}];
 
 graphs=VerGraph[Join[#,ExtVerts]]&/@graphs;
 
@@ -235,29 +258,39 @@ MultigraphDisambiguate[MMAGraph_]:=FixedPoint[MultigraphDisambiguateHelper,MMAGr
 
 (*Clear[VerGraphHashCode];*)
 
-DefineVerGraphHashCode:=(
+DefineVerGraphHashCodes:=(
 VerGraphHashCode[VerGraph[VerList_]]:=VerGraphHashCode[VerGraph[VerList]]=VerGraph[VerList]//VerGraphToMMAGraph//MultigraphDisambiguate//CanonicalGraph;
+
+VerGraphHashCodeWithVers[VerGraph[VerList_]]:=VerGraphHashCodeWithVers[VerGraph[VerList]]=Module[{MMAGraph,CanGraph,CanonicalizedVerMap},MMAGraph=VerGraph[VerList]//VerGraphToMMAGraph//MultigraphDisambiguate;
+CanGraph=MMAGraph//CanonicalGraph;
+CanonicalizedVerMap=FindGraphIsomorphism[CanGraph,MMAGraph,All]//Normal/@#&//Select[#,MatchQ[_ -> Ver[__]]]&/@#&//#/.Ver[_,VerType_]:>VerType&//Sort/@#&//Sort//First; (*Be careful about dotted edges*)
+{CanGraph,CanonicalizedVerMap}
+];
 );
 
 
-GetExtVerts[VerGraph[VerList_]]:=Select[VerList,#/.VerF[x__]:>Length[{x}]==1&];
+GetExtVerts[VerGraph[VerList_]]:=Select[VerList,#/.Ver[edgeList_List,_]:>Length[edgeList]==1&];
 
 
 (*I wouldn't trust this code with 2pt functions.*)
-GenCubicTopologies[n_,l_,MomHead_]:=Module[{a=MomHead,CloseLoop,graphs,extLegs,intLegs},
-(*Close two external lines to form a loop*)
-CloseLoop[graphs_]:=DeleteDuplicatesBy[Flatten[Table[VerGraph[DeleteElements[Identity@@graph,pair]/.-pair[[1,1]]->pair[[2,1]]],{graph,graphs},{pair,Subsets[GetExtVerts[graph],{2}]}]],VerGraphHashCode];
-
-(*Close lines repeatedly*)
-graphs=Nest[CloseLoop,GenCubicTreeTopologies[n+2l,a],l];
-
-(*Relabel graphs so external legs are labeled a[1],a[2]...a[n] and internal legs are labeled a[n+1], a[n+2]...*)
-Table[
-extLegs=gr//GetExtVerts//Identity@@#&/@#&//#/.-x_:>x&;
-intLegs=Complement[gr//Identity@@#&//Sequence@@#&/@#&//#/.-x_:>x&//DeleteDuplicates,extLegs];
-gr/.MapThread[Rule,{Join[extLegs,intLegs],Array[a,2n-3+3l]}]
-,{gr,graphs}]
-];
+GenCubicTopologiesVerF[n_Integer, l_Integer, MomHead_Symbol] := Module[{a = MomHead, CloseLoop, graphs, extLegs, intLegs},
+      (*Close two external lines to form a loop*)
+      CloseLoop[graphs_] := DeleteDuplicatesBy[Flatten[Table[VerGraph[DeleteElements[Identity @@ graph, pair] /. -pair[[1, 1, 1]] -> pair[[2, 1, 1]]], {graph, graphs}, {pair, Subsets[GetExtVerts[graph], {2}]}]], VerGraphHashCode];
+      
+      (*Close lines repeatedly*)
+      graphs = Nest[CloseLoop, GenCubicTreeTopologies[n + 2 l, a], l];
+      
+      (*Relabel graphs so external legs are labeled a[1],a[2]...a[n] and internal legs are labeled a[n+1], a[n+2]...*)
+      Table[
+        (*
+        extLegs=gr//GetExtVerts//Identity@@#&/@#&//#/.-x_:>x&;
+        intLegs=Complement[gr//Identity@@#&//Sequence@@#&/@#&//#/.-x_:>x&//DeleteDuplicates,extLegs];
+        *)
+        extLegs = gr // GetExtVerts // VerToEdgeList // # /. -x_ :> x & // Flatten;
+        intLegs = Complement[gr // Identity @@ # & // # /. -x_ :> x & // VerToEdgeList // Flatten // DeleteDuplicates, extLegs];
+        gr /. MapThread[Rule, {Join[extLegs, intLegs], Array[a, 2 n - 3 + 3 l]}]
+        , {gr, graphs}]
+      ];
 
 
 (* ::Input:: *)
@@ -277,14 +310,14 @@ gr/.MapThread[Rule,{Join[extLegs,intLegs],Array[a,2n-3+3l]}]
 
 
 MomConsRepRules[VerGraph[VerList_],MomToSolveFor_:{}]:=Module[{IntMomenta,ExtMomenta},
-ExtMomenta=GetExtVerts[VerGraph[VerList]]/.VerF[x_]:>x/.-x_:>x;
-IntMomenta=Complement[VerList/.-x_:>x/.VerF->List//Flatten//DeleteDuplicates,ExtMomenta];
-Reduce[DeleteElements[VerList,GetExtVerts[VerGraph[VerList]]]/.VerF[x__]:>Total[{x}]==0,Join[Complement[Join[IntMomenta,{Last[ExtMomenta]}],MomToSolveFor],MomToSolveFor]]//ToRules(*Reduce[eqns,vars] seems to solve eqns in terms of the *reverse* order of vars.  So you want to solve for MomToSolveFor first and then if you can solve for the internal momenta in terms of the external momenta.*)
+ExtMomenta=VerList//VerGraph//GetExtVerts//VerToEdgeList//#/.-x_:>x&//Flatten;
+IntMomenta=Complement[VerList/.-x_:>x//VerToEdgeList//Flatten//DeleteDuplicates,ExtMomenta];
+Reduce[DeleteElements[VerList,GetExtVerts[VerGraph[VerList]]]/.Ver[edgeList_List,_]:>Total[edgeList]==0,Join[Complement[Join[IntMomenta,{Last[ExtMomenta]}],MomToSolveFor],MomToSolveFor]]//ToRules(*Reduce[eqns,vars] seems to solve eqns in terms of the *reverse* order of vars.  So you want to solve for MomToSolveFor first and then if you can solve for the internal momenta in terms of the external momenta.*)
 ];
 
 
 dRepRules[VerGraph[VerList_],AdditionalConstraints_:{},MomToSolveFor_:{}]:=Module[{ExtMomenta},
-ExtMomenta=GetExtVerts[VerGraph[VerList]]/.VerF[x_]:>x/.-x_:>x;
+ExtMomenta=VerList//VerGraph//GetExtVerts//VerToEdgeList//#/.-x_:>x&//Flatten;
 Reduce[Join[(d2[#]==0&/@ExtMomenta),AdditionalConstraints]/.MomConsRepRules[VerGraph[VerList],MomToSolveFor],MomToSolveFor]//ToRules
 ];
 
@@ -293,7 +326,7 @@ RepGraphKin[graph_][expr_]:=expr/.MomConsRepRules[graph]/.dRepRules[graph];
 
 
 MandelstamBasisOfGraph[VerGraph[VerList_]]:=Module[{vars},
-vars=VerList//#/.VerF->List&//#/.-x_:>x&//Flatten//DeleteDuplicates;
+vars=VerList//VerToEdgeList//#/.-x_:>x&//Flatten//DeleteDuplicates;
 Outer[d,vars,vars]//Flatten//RepGraphKin[VerGraph[VerList]]//#/.d[x__]:>Sow[d[x]]&//Reap//Last//First//DeleteDuplicates
 ];
 
@@ -307,8 +340,8 @@ TadpoleQ[graph_]:=MomConsRepRules[graph]//Last/@#&//MemberQ[0];
 
 
 TadpoleOrBubbleOnExtLegQ[VerGraph[VerList_]]:=Module[{ExtMomenta,IntMomenta},
-ExtMomenta=GetExtVerts[VerGraph[VerList]]/.VerF[x_]:>x/.-x_:>x;
-IntMomenta=Complement[VerList/.-x_:>x/.VerF->List//Flatten//DeleteDuplicates,ExtMomenta];
+ExtMomenta=VerList//VerGraph//GetExtVerts//VerToEdgeList//#/.-x_:>x&//Flatten;
+IntMomenta=Complement[VerList/.-x_:>x//VerToEdgeList//Flatten//DeleteDuplicates,ExtMomenta];
 (d2/@IntMomenta)/.MomConsRepRules[VerGraph[VerList]]/.dRepRules[VerGraph[VerList]]/.d[0,_]:>0//Expand//MemberQ[0]
 ];
 
@@ -338,13 +371,13 @@ IntMomenta=Complement[VerList/.-x_:>x/.VerF->List//Flatten//DeleteDuplicates,Ext
 (*Clear[grs]*)*)
 
 
-GraphSignature[VerGraph[VerList_]]:=VerList/.VerF->List//Signature/@#&//Times@@#&;
+GraphSignature[VerGraph[VerList_]]:=VerList//#/.Ver[edList_,VerF]:>Signature[edList]&//#/.Ver[edList_,VerD]:>1&//Times@@#&;
 
 
-VerGraphToMMAGraph[VerGraph[VerList_]]:=Graph[UndirectedEdge@@@Table[VerList[[#]]&/@First/@Position[VerList,vert],{vert,VerList/.-x_:>x/.VerF->List//Flatten//DeleteDuplicates}]];(*Needs to capture tadpoles and the 3pt correctly so you have to use this ugly solution*)
+VerGraphToMMAGraph[VerGraph[VerList_]]:=Graph[UndirectedEdge@@@Table[VerList[[#]]&/@First/@Position[VerList,vert],{vert,VerList/.-x_:>x//VerToEdgeList//Flatten//DeleteDuplicates}]];(*Needs to capture tadpoles and the 3pt correctly so you have to use this ugly solution*)
 
 
-VerGraphToEdgeGraph[VerGraph[VerList_]]:=Table[DirectedEdge[VerList[[FirstPosition[VerList,vert,Missing["NotFound"],{2}][[1]]]],VerList[[FirstPosition[VerList,-vert,Missing["NotFound"],{2}][[1]]]]]->vert,{vert,VerList/.-x_:>x/.VerF->List//Flatten//DeleteDuplicates}]//EdgeGraph;(*The funny syntax on FirstPosition is so that you pick up vert and not -vert by mistake.*)
+VerGraphToEdgeGraph[VerGraph[VerList_]] := Table[DirectedEdge[VerList[[FirstPosition[VerList, vert, Missing["NotFound"], {3}][[1]]]], VerList[[FirstPosition[VerList, -vert, Missing["NotFound"], {3}][[1]]]]] -> vert, {vert, VerList /. -x_ :> x // VerToEdgeList // Flatten // DeleteDuplicates}] // EdgeGraph;(*The funny syntax on FirstPosition is so that you pick up vert and not -vert by mistake.*)
 
 
 (* ::Input:: *)
@@ -354,11 +387,12 @@ VerGraphToEdgeGraph[VerGraph[VerList_]]:=Table[DirectedEdge[VerList[[FirstPositi
 EdgeGraphToVerGraph[EdgeGraph[edgeList_]]:=edgeList//First/@#&//VertexList//VerGraph;
 
 
-PrintEdgeGraph[EdgeGraph[edgeList_]]:=Module[{extVerts,nn},
-extVerts=EdgeGraph[edgeList]//EdgeGraphToVerGraph//GetExtVerts;
+PrintEdgeGraph[EdgeGraph[edgeList_]]:=Module[{extVerts,nn,verGr},
+verGr=EdgeGraph[edgeList]//EdgeGraphToVerGraph;
+extVerts=verGr//GetExtVerts;
 nn=Length[extVerts];
 
-GraphPlot[edgeList//Labeled[#[[1]],#[[2]]//ToString]&/@#&,VertexCoordinates->MapThread[Rule,{extVerts,Table[N[{Cos[2Pi i/nn],Sin[2Pi i/nn]}],{i,1,nn}]}]]
+GraphPlot[edgeList//Labeled[#[[1]],#[[2]]//ToString]&/@#&,VertexCoordinates->MapThread[Rule,{extVerts,Table[N[{Cos[2Pi i/nn],Sin[2Pi i/nn]}],{i,1,nn}]}],VertexStyle->(verGr//Identity@@#&//Select[#,(!FreeQ[#,VerD])&]&//#->Red&/@#&)]
 ];
 
 
@@ -432,6 +466,9 @@ MMAGrTarget=EdGrTarget//First/@#&//UndirectedGraph;
 
 GrIsos=Sequence[MMAGrSource,MMAGrTarget]//isofunction;(*VerS -> VerT*)
 
+(*Make sure that the VerTypes match up in the isos.*)
+GrIsos=GrIsos//Select[#,(#//Normal//#/.(Ver[_,VerType1_]->Ver[_,VerType2_]):>(VerType1===VerType2)&//And@@#&)&]&;
+
 Table[EdGrTarget/.(EdGrSource/.iso)/.(EdGrSource/.iso/.(DirectedEdge[a_,b_]->c_):>(DirectedEdge[b,a]->-c))/.(-x_->y_):>(x->-y),{iso,GrIsos}]
 ];
 
@@ -440,7 +477,7 @@ DotThisEdge[edgelist_,edge_]:=Module[{vPair,vLeft,vRight,b},
 vPair=edgelist//Reverse/@#&//edge/.#&//List@@#&;
 vLeft=vPair//First;
 vRight=vPair//Last;
-edgelist/.(DirectedEdge[vLeft,vRight]->edge)->{DirectedEdge[vLeft,VerF[-edge,b]]->edge,DirectedEdge[VerF[-edge,b],vRight]->b}/.vRight->(vRight/.-edge->-b)//Flatten
+edgelist/.(DirectedEdge[vLeft,vRight]->edge)->{DirectedEdge[vLeft,Ver[{-edge,b},VerF]]->edge,DirectedEdge[Ver[{-edge,b},VerF],vRight]->b}/.vRight->(vRight/.-edge->-b)//Flatten
 ];
 
 
@@ -461,8 +498,8 @@ gr2=VerGraph[VerListTarget]//VerGraphMultigraphDisambiguate;
 
 If[VerListSource===VerListTarget,gr2=gr1];(*You need this when you're using FindMinimalSpanningAutomorphismsNoMultigraphs to look at multigraphs otherwise the new private labels x$111 from VerGraphMultigraphDisambiguate won't align properly.*)
 
-gr1UnDotRules=gr1//Identity@@#&//#/.VerF[-x_,y_]:>Sow[y->x]&//Reap//Last//Flatten;
-gr2UnDotRules=gr2//Identity@@#&//#/.VerF[-x_,y_]:>Sow[y->x]&//Reap//Last//Flatten;
+gr1UnDotRules=gr1//Identity@@#&//#/.Ver[{-x_,y_},_]:>Sow[y->x]&//Reap//Last//Flatten;
+gr2UnDotRules=gr2//Identity@@#&//#/.Ver[{-x_,y_},_]:>Sow[y->x]&//Reap//Last//Flatten;
 
 Map[DeleteDuplicates[#/.gr1UnDotRules/.gr2UnDotRules]&,FindVerGraphMorphismsNoMultigraphs[gr1,gr2,isofunction]]
 ];
@@ -511,22 +548,37 @@ FindVerGraphSpanningAutomorphisms[graph_]:=FindVerGraphMorphisms[graph,graph,Fin
 (*Setup basis graphs*)
 
 
-RunGraphSetup[n_,l_,MomentumHead_]:=Module[{a=MomentumHead},
+GenCubicTopologies[n_Integer, l_Integer, MomHead_Symbol, VerTypeList_List]:=Module[{CubicTopologies,ExtVerts,IntVerts,DifferentVerChoices,CubicGrsAllVerChoices,GraphsGroupedByNumberOfEachVerType,GraphsDifferentVerChoices,UniqueGraphList},
+	CubicTopologies=Select[GenCubicTopologiesVerF[n,l,MomHead],(!TadpoleOrBubbleOnExtLegQ[#])&];
+	Table[
+		ExtVerts=gr//GetExtVerts;
+		IntVerts=gr//Identity@@#&//Complement[#,ExtVerts]&;
+		DifferentVerChoices=IntVerts/.Ver[list_,_]:>(Ver[list,#]&/@VerTypeList);
+		GraphsDifferentVerChoices=DifferentVerChoices//Outer[VerGraph[Join[List[##],ExtVerts]]&,##]&@@#&//Flatten;
+		GraphsDifferentVerChoices//DeleteDuplicatesBy[#,VerGraphHashCodeWithVers]&
+	,{gr,CubicTopologies}]//Flatten
+];
 
-ClearAll[GenNkMCGraphsOfCuts,VerGraphHashCode];(*Clear the caches of these functions because if you change CubicBasisGraphs you probably don't need to store the VerGraphHaseCodes any more and you definitely don't want to store GenNkMCGraphsOfCuts.*)
+
+RunGraphSetup[n_Integer,l_Integer,MomentumHead_Symbol,VerTypesList_List]:=Module[{a=MomentumHead},
+
+IntVerTypesList=VerTypesList;
+
+ClearAll[GenNkMCGraphsOfCuts,VerGraphHashCode,VerGraphHashCodeWithVers];(*Clear the caches of these functions because if you change CubicBasisGraphs you probably don't need to store the VerGraphHaseCodes any more and you definitely don't want to store GenNkMCGraphsOfCuts.*)
 
 DefineGenNkMCGraphsOfCuts;
-DefineVerGraphHashCode;
+DefineVerGraphHashCodes;
 
 AddLVecHeads[a];
 Print["Added ", a," to LVecHeads"];
-CubicBasisGraphs=Select[GenCubicTopologies[n,l,a],(!TadpoleOrBubbleOnExtLegQ[#])&];
+CubicBasisGraphs=GenCubicTopologies[n,l,a,VerTypesList];
 
-CanonicalNumeratorVariables=CubicBasisGraphs//First//Identity@@#&//List@@#&/@#&//Flatten//#/.-x_:>x&//DeleteDuplicates//Sort;
+
+CanonicalNumeratorVariables=CubicBasisGraphs//First//Identity@@#&//VerToEdgeList//Flatten//#/.-x_:>x&//DeleteDuplicates//Sort;
 
 BasisGraphNumeratorPairs=Table[{CubicBasisGraphs[[i]],num[i][CanonicalNumeratorVariables]},{i,1,Length[CubicBasisGraphs]}];
 
-BasisMMAGraphNumeratorPairs=Table[{elm[[1]]//VerGraphHashCode,elm[[2]]/.num[x_][y_]:>num[x]},{elm,BasisGraphNumeratorPairs}];
+VerGraphHashCodeWithVersToBasisGraph=CubicBasisGraphs//VerGraphHashCodeWithVers[#]->#&/@#&;
 ];
 
 
@@ -534,49 +586,70 @@ BasisMMAGraphNumeratorPairs=Table[{elm[[1]]//VerGraphHashCode,elm[[2]]/.num[x_][
 (*Generate functional Jacobis*)
 
 
-PinchEdgeHelper[VerGraph[VerList_],EdGrEdgeToPinch_]:=Module[{VerL,VerR,NewVer,SharedEdge},
-SharedEdge=EdGrEdgeToPinch[[2]];
-VerL=EdGrEdgeToPinch//List@@#[[1,1]]&;
-VerR=EdGrEdgeToPinch//List@@#[[1,2]]&;
-NewVer=Join[VerL/.{a___,SharedEdge,b___}:>{Reverse[{b}],a},VerR/.{a___,-SharedEdge,b___}:>{b,Reverse[{a}]}]//Flatten//VerF@@#&;
-DeleteCases[VerGraph[VerList],VerF@@VerL,Infinity]/.VerF@@VerR->NewVer
+PinchEdgeHelper[VerGraph[VerList_],EdGrEdgeToPinch_]:=Module[{VerL,VerR,VerTypeL,VerTypeR,NewVer,SharedEdge},
+SharedEdge=EdGrEdgeToPinch/.HoldPattern[DirectedEdge[vL_,vR_]->ed_]:>ed;
+{VerL,VerTypeL}=EdGrEdgeToPinch/.HoldPattern[DirectedEdge[vL_,vR_]->ed_]:>vL//List@@#&;
+{VerR,VerTypeR}=EdGrEdgeToPinch/.HoldPattern[DirectedEdge[vL_,vR_]->ed_]:>vR//List@@#&;
+NewVer=Join[VerL/.{a___,SharedEdge,b___}:>{Reverse[{b}],a},VerR/.{a___,-SharedEdge,b___}:>{b,Reverse[{a}]}]//Flatten//Ver[#,blob[VerTypeL,VerTypeR]]&;
+VerList//DeleteCases[#,Ver[VerL,VerTypeL]]&//DeleteCases[#,Ver[VerR,VerTypeR]]&//Append[#,NewVer]&//VerGraph
 ];
 
 
 (*Here the edge must be a *positive* momentum label like p[4] not -p[3]. <-- This shouldn't be true anymore.*)
 PinchSpecifiedEdge[VerGraph[VerList_],edge_]:=Module[{EdGraph,EdGrEdgeToPinch,ed},
 ed=edge/.-x_:>x;
-EdGraph=VerGraphToEdgeGraph[VerGraph[VerList]];EdGrEdgeToPinch=EdGraph//Identity@@#&//Select[#,Last[#]===edge&]&//First;PinchEdgeHelper[VerGraph[VerList],EdGrEdgeToPinch]
+EdGraph=VerGraph[VerList]//VerGraphToEdgeGraph;
+EdGrEdgeToPinch=EdGraph//Identity@@#&//Select[#,Last[#]===edge&]&//First;
+PinchEdgeHelper[VerGraph[VerList],EdGrEdgeToPinch]
 ];
 
 
 PinchOneEdge[VerGraph[VerList_]]:=Module[{EdGraph,EdList,SharedEdge,VerL,VerR,NewVer,ExtVertList,EdListNoExtVerts,EdListNoExtVertsOrSelfLoops},
 EdGraph=VerGraph[VerList]//VerGraphToEdgeGraph;
 EdList=EdGraph//Identity@@#&;
-ExtVertList=GetExtVerts[VerGraph[VerList]]//Identity@@#&/@#&//#/.-x_:>x&;
+ExtVertList=VerGraph[VerList]//GetExtVerts//VerToEdgeList//#/.-x_:>x&//Flatten;
 EdListNoExtVerts=Select[EdList,!MemberQ[ExtVertList,Last[#]]&];
-EdListNoExtVertsOrSelfLoops=Select[EdListNoExtVerts,(!MatchQ[#,DirectedEdge[VerF[x__],VerF[x__]]->y_])&];
+EdListNoExtVertsOrSelfLoops=Select[EdListNoExtVerts,(!MatchQ[#,DirectedEdge[Ver[edgeList_List,verType_],Ver[edgeList_List,verType_]]->x_])&];
 
-EdListNoExtVertsOrSelfLoops//PinchEdgeHelper[VerGraph[VerList],#]&/@#&//DeleteDuplicatesBy[#,VerGraphHashCode]&
+EdListNoExtVertsOrSelfLoops//PinchEdgeHelper[VerGraph[VerList],#]&/@#&//DeleteDuplicatesBy[#,VerGraphHashCodeWithVers]&
 ];
 
 
-PinchOneEdgeOnSetOfGraphs[VerGraphList_]:=VerGraphList//PinchOneEdge/@#&//Flatten//DeleteDuplicatesBy[#,VerGraphHashCode[#]&]&;
+PinchOneEdgeOnSetOfGraphs[VerGraphList_]:=VerGraphList//PinchOneEdge/@#&//Flatten//DeleteDuplicatesBy[#,VerGraphHashCodeWithVers[#]&]&;
 
 
-BlowUpVertexIntoJacobiTriplet[VerGraph[VerList_]]:=Module[{ax},
+(* ::Text:: *)
+(*For some reason I am now getting different Jacobi equations than I did before (compared to the ones you'd get from using the version of the package in the 4pt 2loop NLSM paper).  I'm not quite sure why this is.  I do VerF-VerF type Jacobis as (1234)+cyc(123) whereas I did them as (1234)+cyc(234) before but even that doesn't account for all of the differences.  Once you solve graph syms everything works out again and you get the same answers.  This version of the package also correctly reproduces the 4pt 3loop N=4 results.  I'm still super worried that there's a subtle bug somewhere.*)
+
+
+BlowUpVertexIntoJacobiTriplet[VerGraph[VerList_]]:=Module[{ax,BlobVert,a1,a2,a3,a4,vf,vd,VerListNoBlob,BlowUpFF,BlowUpDF},
 ax=EdgeInsertedInJacobi;
-{VerGraph[VerList]/.VerF[a1_,a2_,a3_,a4_]:>Sequence[VerF[a1,a2,ax],VerF[-ax,a3,a4]],VerGraph[VerList]/.VerF[a1_,a2_,a3_,a4_]:>Sequence[VerF[a1,a3,ax],VerF[-ax,a4,a2]],VerGraph[VerList]/.VerF[a1_,a2_,a3_,a4_]:>Sequence[VerF[a1,a4,ax],VerF[-ax,a2,a3]]}
+vf[x__]:=Ver[{x},VerF];
+vd[x__]:=Ver[{x},VerD];
+
+BlobVert=VerList/.Ver[verList_,blob[x__]]:>Sow[Ver[verList,blob[x]]]//Reap//Last//First//First;
+VerListNoBlob=DeleteCases[VerList,BlobVert];
+{a1,a2,a3,a4}=BlobVert//VerToEdgeList;
+
+BlowUpFF:={{vf[a1,a2,ax],vf[-ax,a3,a4]},{vf[a2,a3,ax],vf[-ax,a1,a4]},{vf[a3,a1,ax],vf[-ax,a2,a4]}}//Join[VerListNoBlob,#]&/@#&//VerGraph/@#&;
+BlowUpDF:={{vd[a1,a2,ax],vf[-ax,a3,a4]},{vd[a2,a3,ax],vf[-ax,a1,a4]},{vd[a3,a1,ax],vf[-ax,a2,a4]}}//Join[VerListNoBlob,#]&/@#&//VerGraph/@#&;
+
+Switch[BlobVert//Last,
+blob[VerF,VerF], BlowUpFF,
+blob[VerD,VerF], BlowUpDF,
+blob[VerF,VerD], {a1,a2,a3,a4}={a3,a4,a1,a2}; BlowUpDF,
+blob[VerD,VerD], Nothing
+]
 ];(*Be careful about the labels on how you blow up the vertex.  Later on we will use EdgeInsertedInJacobi to easily identify the inserted leg to eliminate it with momentum conservation.*)
 
 
-FindVerGraphNumerator[VerGraph[InputVerList_]]:=Module[{CanMMAGraph,ni,basisVerGraph,iso},
-CanMMAGraph=VerGraph[InputVerList]//VerGraphHashCode;
-ni=CanMMAGraph/.(BasisMMAGraphNumeratorPairs//Rule@@#&/@#&);
-basisVerGraph=ni/.(BasisGraphNumeratorPairs//Reverse/@#&//#/.num[x_][y_]:>num[x]&//Rule@@#&/@#&);
+FindVerGraphNumerator[VerGraph[InputVerList_]]:=Module[{numer,basisVerGraph,iso},
+basisVerGraph=VerGraph[InputVerList]//VerGraphHashCodeWithVers//#/.VerGraphHashCodeWithVersToBasisGraph&;
 (*Find isomorphism from basis graph to the input graph*)
 iso=FindVerGraphIsomorphisms[basisVerGraph,VerGraph[InputVerList]]//First;
-GraphSignature[basisVerGraph/.iso]GraphSignature[VerGraph[InputVerList]] (ni[CanonicalNumeratorVariables]/.iso)(*Make sure the signs make sense.  Isomorphism phi maps from source graph (g_sr) to target graph (g_ta) and sgn(g) means the signature of graph g.  g_ta = sgn(g_ta) sgn(phi(g_sr)) phi(g_sr)*)
+numer=BasisGraphNumeratorPairs//Rule@@#&/@#&//basisVerGraph/.#&;
+
+GraphSignature[basisVerGraph/.iso]GraphSignature[VerGraph[InputVerList]] (numer/.iso)(*Make sure the signs make sense.  Isomorphism phi maps from source graph (g_sr) to target graph (g_ta) and sgn(g) means the signature of graph g.  g_ta = sgn(g_ta) sgn(phi(g_sr)) phi(g_sr)*)
 ];
 
 
@@ -589,7 +662,8 @@ If[IncludeTadpoleBELJacobis==False,JacobiRelationsOnGraphs=JacobiRelationsOnGrap
 
 JacobiRelationsOnNumerators=Module[{EliminateInsertedLeg},
 Table[
-EliminateInsertedLeg=EdgeInsertedInJacobi->(graph//Identity@@#&//SelectFirst[#,(!FreeQ[#,-EdgeInsertedInJacobi]&)]&//List@@#&//Total//#+EdgeInsertedInJacobi&);graph//FindVerGraphNumerator//#/.EliminateInsertedLeg&
+EliminateInsertedLeg=EdgeInsertedInJacobi->(graph//Identity@@#&//SelectFirst[#,(!FreeQ[#,-EdgeInsertedInJacobi]&)]&//VerToEdgeList//Total//#+EdgeInsertedInJacobi&);
+graph//FindVerGraphNumerator//#/.EliminateInsertedLeg&
 ,{jacobi,JacobiRelationsOnGraphs},{graph,jacobi}]];(*Find the Jacobi relations between the numerators and eliminate the inserted leg with momentum conservation.*)
 
 SimplifiedJacobis=JacobiRelationsOnNumerators/.num[x_][y_]:>num[x]/.a_*num[x_]:>num[x]//Sort/@#&//DeleteCases[#,{x_,x_,x_}]&//DeleteCases[#,{x_,x_}]&;(*Want to ignore self Jacobis that don't help determine a basis*)
@@ -695,7 +769,15 @@ jac//Total//NumeratorsToMasterNumerators//RepNumFunc//RepGraphKin[PinchedGraph]/
 
 
 RunGraphSymSetup:=(
-GraphSymRelationsOnNumerators=Module[{gr,numer},
+GraphSymRelationsOnNumerators=Module[{gr,numer,IsoFunc},
+
+If[Length[IntVerTypesList]==1,
+IsoFunc[graph_]:=FindVerGraphSpanningAutomorphisms[graph];
+Print["Using FindVerGraphSpanningAutomorphisms to find graph symmetries because there is only one vertex type."];,
+IsoFunc[graph_]:=FindVerGraphIsomorphisms[graph,graph]//Rest;
+Print["Using FindVerGraphIsomorphisms to find graph symmetries because there are multiple vertex types.  This is massively overcomplete but airtight."];
+];
+
 Table[
 gr=elm[[1]];
 numer=elm[[2]];
@@ -703,7 +785,8 @@ Table[numer-GraphSignature[gr]GraphSignature[gr/.iso](numer/.iso),{iso,FindVerGr
 ,{elm,BasisGraphNumeratorPairs}]//Flatten(*Be careful about the signs on GraphSignature*)
 ];
 
-GraphSymRelationsOnNumeratorsSorted=GraphSymRelationsOnNumerators//{#,#//NumeratorsToMasterNumerators//Length}&/@#&//Select[#,Last[#]>0&]&//SortBy[Last]//First/@#&;
+GraphSymRelationsOnNumeratorsNontrivial=GraphSymRelationsOnNumerators//{#,#//NumeratorsToMasterNumerators//Length}&/@#&//Select[#,Last[#]>0&]&//SortBy[Last]//First/@#&;
+(*The 'SortBy[Last]' piece isn't strictly needed but it will make things look tidier*)
 
 );
 
@@ -722,13 +805,13 @@ GraphSymRelation//NumeratorsToMasterNumerators//RepNumFunc//RepGraphKin[graph]//
 
 UnorderedCubicGraphs[3,MomentumHead_]:=UnorderedCubicGraphs[3,MomentumHead]=GenCubicTreeTopologies[3,MomentumHead];
 
-UnorderedCubicGraphs[n_,MomentumHead_]:=UnorderedCubicGraphs[n,MomentumHead]=Module[{a=MomentumHead},Table[graph/.VerF[x___,ed,y___]:>Sequence[VerF[-a[n]],VerF[ed,in[n-3],a[n]],VerF[x,-in[n-3],y]],{graph,UnorderedCubicGraphs[n-1,MomentumHead]},{ed,Join[Array[a,n-1],Array[in,n-4]//Flatten]}]//Flatten
+UnorderedCubicGraphs[n_,MomentumHead_]:=UnorderedCubicGraphs[n,MomentumHead]=Module[{a=MomentumHead},Table[graph/.Ver[{x___,ed,y___},VerF]:>Sequence[Ver[{-a[n]},VerF],Ver[{ed,in[n-3],a[n]},VerF],Ver[{x,-in[n-3],y},VerF]],{graph,UnorderedCubicGraphs[n-1,MomentumHead]},{ed,Join[Array[a,n-1],Array[in,n-4]//Flatten]}]//Flatten
 ];
 
 
 (* ::Input:: *)
 (*(*Table[(2n-5)!!,{n,3,8}]*)
-(*Table[UnorderedCubicGraphs[n]//Length,{n,3,8}]//AbsoluteTiming*)*)
+(*Table[UnorderedCubicGraphs[n,p]//Length,{n,3,8}]//AbsoluteTiming*)*)
 
 
 (* ::Text:: *)
@@ -740,27 +823,28 @@ UnorderedCubicGraphs[n_,MomentumHead_]:=UnorderedCubicGraphs[n,MomentumHead]=Mod
 
 OrderedCubicGraphs[3,MomentumHead_]:=OrderedCubicGraphs[3,MomentumHead]=GenCubicTreeTopologies[3,MomentumHead];
 
-OrderedCubicGraphs[n_,MomentumHead_]:=OrderedCubicGraphs[n,MomentumHead]=Module[{GoodEdges,edge,vertex,a=MomentumHead},
+OrderedCubicGraphs[n_,MomentumHead_]:=OrderedCubicGraphs[n,MomentumHead]=Module[{ver,GoodEdges,edge,vertex,a=MomentumHead},
 Table[
 edge=a[1];
-vertex=graph//Identity@@#&//SelectFirst[#,MatchQ[VerF[___,edge,___]]]&;
+vertex=graph//Identity@@#&//SelectFirst[#,MatchQ[ver[___,edge,___]]]&;
 
 GoodEdges=While[UnsameQ[edge , -a[n-1]],
 Sow[edge];
-vertex=graph//Identity@@#&//SelectFirst[#,MatchQ[VerF[___,edge,___]]]&;
+vertex=graph//Identity@@#&//SelectFirst[#,MatchQ[ver[___,edge,___]]]&;
 edge=-vertex[[vertex//List@@#&//FirstPosition[edge]//First//Mod[#-1,3(*Cubic vertex*),1]&]];
 ]//Reap//Last//Flatten;
 
-Join[Table[graph/.VerF[x___,ed,y___]:>Sequence[VerF[-a[n]],VerF[ed,in[n-3],a[n]],VerF[x,-in[n-3],y]],{ed,GoodEdges}],
-{graph/.VerF[x___,a[n-1],y___]:>Sequence[VerF[-a[n]],VerF[a[n-1],a[n],in[n-3]],VerF[x,-in[n-3],y]]}
+Join[Table[graph/.ver[x___,ed,y___]:>Sequence[ver[-a[n]],ver[ed,in[n-3],a[n]],ver[x,-in[n-3],y]],{ed,GoodEdges}],
+{graph/.ver[x___,a[n-1],y___]:>Sequence[ver[-a[n]],ver[a[n-1],a[n],in[n-3]],ver[x,-in[n-3],y]]}
 ](*The last leg is  weird*)
-,{graph,OrderedCubicGraphs[n-1,MomentumHead]}]//Flatten
+,{graph,OrderedCubicGraphs[n-1,MomentumHead]/.Ver[edgeList_,_]:>ver@@edgeList}]//Flatten//#/.ver[edgeSequence__]:>Ver[{edgeSequence},VerF]&
+(*I hate this solution to the VerF problem because it's such a hacky way to convert between my old and new code but at least it works...*)
 ];
 
 
 (* ::Input:: *)
 (*(*Table[2^(n-2)(2n-5)!!/(n-1)!,{n,3,10}]*)
-(*Table[OrderedCubicGraphs[n]//Length,{n,3,10}]//AbsoluteTiming*)*)
+(*Table[OrderedCubicGraphs[n,p]//Length,{n,3,10}]//AbsoluteTiming*)*)
 
 
 (* ::Subsection:: *)
@@ -778,24 +862,24 @@ Join[Table[graph/.VerF[x___,ed,y___]:>Sequence[VerF[-a[n]],VerF[ed,in[n-3],a[n]]
 (*For a graph of cuts, sort the vertices into two sets*)
 (*The first set (the unchanged/prefactor vertices) have length 3 or less.*)
 (*The blow up set has length more than 3.*)
-(*Loop/Table over the blow up set.  Turn each one into a set of ordered trees and increase the internal leg counter accordingly (i -> i + vertex length -3 where i starts at length of legs in graph).*)
+(*Loop/Table over the blown up set.  Turn each one into a set of ordered trees and increase the internal leg counter accordingly (i -> i + vertex length -3 where i starts at length of legs in graph).*)
 (*Now take outer product by appending the prefactor and then outer producting over every blow up of every graph.*)
 (**)
 (*So you need to keep track of the uncut propagators (in[1]...) and use momentum conservation to solve for them in terms of the momenta of the GraphOfCuts.  So basically BlowUpOrderedCuts has to keep track of {graph, props, mom cons} for each graph in OrderedCubicGraphs.*)
 
 
 BlowUpCuts[VerGraph[GraphOfCutsVerList_],TreeGraphGeneratingFunction_]:=Module[{joinGraphs,PrefactorVertices,VerticesToBlowUp,AlmostEdgeList,NodeHead,index,BlownUpGraphs,vList,n,ret,a},
-a=GraphOfCutsVerList//First//First//#/.-x_:>x&//Head;(*So 'a' will be the Head of the momentum vectors like 'k' or 'p'.*)
-PrefactorVertices=Select[GraphOfCutsVerList,Length[List@@#]<=3&];
+a=GraphOfCutsVerList//First//First//First//#/.-x_:>x&//Head;(*So 'a' will be the Head of the momentum vectors like 'k' or 'p'.*)
+PrefactorVertices=Select[GraphOfCutsVerList,(#//VerToEdgeList//Length//#<=3&)&];
 VerticesToBlowUp=Complement[GraphOfCutsVerList,PrefactorVertices];
 If[VerticesToBlowUp==={},Return[{VerGraph[GraphOfCutsVerList]}]];
-AlmostEdgeList=GraphOfCutsVerList//#/.VerF[x__]:>{x}&//Flatten//#/.-x_:>x&;
+AlmostEdgeList=GraphOfCutsVerList//VerToEdgeList//Flatten//#/.-x_:>x&;
 NodeHead=AlmostEdgeList//First//Head;
 index=AlmostEdgeList//#/.NodeHead[x_]:>x&//Max//#+1&;
 BlownUpGraphs=Table[
-vList=List@@ver;
+vList=ver//First;
 n=Length[vList];
-ret=TreeGraphGeneratingFunction[n,a]/.VerF[-a[x_]]:>(##&[])/.RepList[Join[Array[a,n],Array[in,n-3]],Join[vList,Array[a,n-3,index]]](*/.VerGraph[x_]:>x*);
+ret=TreeGraphGeneratingFunction[n,a]/.Ver[{-a[x_]},_]:>(##&[])/.RepList[Join[Array[a,n],Array[in,n-3]],Join[vList,Array[a,n-3,index]]](*/.VerGraph[x_]:>x*);
 index+=n-3;
 ret
 ,{ver,VerticesToBlowUp}];
@@ -815,9 +899,9 @@ BlowUpUnorderedCuts[VerGraph[GraphOfCutsVerList_]]:=BlowUpCuts[VerGraph[GraphOfC
 
 
 GetBlownUpGraphMomConsAndUncutProps[VerGraph[GraphOfCutsVerList_],VerGraph[BlownUpGraphVerList_]]:=Module[{ExtMomenta,CutMomenta,UncutMomenta,MomConsRules,dRules},
-ExtMomenta=GetExtVerts[VerGraph[GraphOfCutsVerList]]/.VerF[x_]:>x/.-x_:>x;
-CutMomenta=Complement[GraphOfCutsVerList/.-x_:>x/.VerF->List//Flatten//DeleteDuplicates,ExtMomenta];
-UncutMomenta=Complement[BlownUpGraphVerList/.-x_:>x/.VerF->List//Flatten//DeleteDuplicates,CutMomenta,ExtMomenta];
+ExtMomenta=GraphOfCutsVerList//VerGraph//GetExtVerts//VerToEdgeList//#/.-x_:>x&//Flatten;
+CutMomenta=Complement[GraphOfCutsVerList/.-x_:>x//VerToEdgeList//Flatten//DeleteDuplicates,ExtMomenta];
+UncutMomenta=Complement[BlownUpGraphVerList/.-x_:>x//VerToEdgeList//Flatten//DeleteDuplicates,CutMomenta,ExtMomenta];
 
 MomConsRules=MomConsRepRules[VerGraph[BlownUpGraphVerList],UncutMomenta];
 
@@ -826,8 +910,8 @@ MomConsRules=MomConsRepRules[VerGraph[BlownUpGraphVerList],UncutMomenta];
 
 
 GetGraphOfCutsKinematics[VerGraph[GraphOfCutsVerList_]]:=Module[{ExtMomenta,CutMomenta,MomConsRules,dRules},
-ExtMomenta=GetExtVerts[VerGraph[GraphOfCutsVerList]]/.VerF[x_]:>x/.-x_:>x;
-CutMomenta=Complement[GraphOfCutsVerList/.-x_:>x/.VerF->List//Flatten//DeleteDuplicates,ExtMomenta];
+ExtMomenta=GetExtVerts[VerGraph[GraphOfCutsVerList]]//VerToEdgeList//#/.-x_:>x&//Flatten;
+CutMomenta=Complement[GraphOfCutsVerList/.-x_:>x//VerToEdgeList//Flatten//DeleteDuplicates,ExtMomenta];
 MomConsRules=MomConsRepRules[VerGraph[GraphOfCutsVerList]];
 dRules=dRepRules[VerGraph[GraphOfCutsVerList],d2[#]==0&/@CutMomenta];
 
@@ -836,7 +920,9 @@ dRules=dRepRules[VerGraph[GraphOfCutsVerList],d2[#]==0&/@CutMomenta];
 
 
 MandelstamBasisOfGraphOfCuts[VerGraph[GraphOfCutsVerList_]]:=Module[{vars,MomCons,dRules},
-{MomCons,dRules}=GetGraphOfCutsKinematics[VerGraph[GraphOfCutsVerList]];vars=GraphOfCutsVerList//#/.VerF->List&//#/.-x_:>x&//Flatten//DeleteDuplicates;Outer[d,vars,vars]//Flatten//#/.MomCons&//#/.dRules&//#/.d[x__]:>Sow[d[x]]&//Reap//Last//First//DeleteDuplicates
+{MomCons,dRules}=GetGraphOfCutsKinematics[VerGraph[GraphOfCutsVerList]];
+vars=GraphOfCutsVerList//VerToEdgeList//#/.-x_:>x&//Flatten//DeleteDuplicates;
+Outer[d,vars,vars]//Flatten//#/.MomCons&//#/.dRules&//#/.d[x__]:>Sow[d[x]]&//Reap//Last//First//DeleteDuplicates
 ];
 
 
@@ -865,7 +951,7 @@ VerticesToBlowUp=Complement[GraphOfCutsVerList,PrefactorVertices];
 If[VerticesToBlowUp==={},Return[{VerGraph[GraphOfCutsVerList]}]];
 VerticesWithPermutedLabels=Table[
 edList=ver//List@@#&;
-edList[[4;;]]//Permutations//Join[edList[[;;3]],#]&/@#&//VerF@@#&/@#&
+edList[[4;;]]//Permutations//Join[edList[[;;3]],#]&/@#&//Ver[#,VerF]&/@#&
 ,{ver,VerticesToBlowUp}];
 Outer[joinGraphs,##]&@@VerticesWithPermutedLabels//Flatten//#/.joinGraphs[x__]:>VerGraph[Join[PrefactorVertices,{x}]]&
 ];(*For each blob in the GraphOfCuts this will do (n-3)! relabelings of the legs.  This should be enough cuts for any theory that has tree-level color-kinematics duality.
@@ -887,7 +973,7 @@ GenNkMCGraphsOfCuts[k]=CubicBasisGraphs//Nest[PinchOneEdgeOnSetOfGraphs,#,k]&//S
 
 CutLHS[GraphOfCuts_, AmpHead_]:=Module[{MomRules,dRules},
 {MomRules,dRules}=GetGraphOfCutsKinematics[GraphOfCuts];
-GraphOfCuts//Identity@@#&//DeleteCases[VerF[_]]//Times@@#&//#/.VerF[x__]:>AmpHead[{x}]&//#/.MomRules&//#/.dRules&
+GraphOfCuts//Identity@@#&//DeleteCases[Ver[{_},_]]//Times@@#&//#/.Ver[edgeList_List,_]:>AmpHead[edgeList]&//#/.MomRules&//#/.dRules&
 ];
 
 
